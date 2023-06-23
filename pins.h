@@ -1,5 +1,5 @@
-#define HALL_PULSE_PIN 4 
-#define ENABLE_SERIAL_PIN 5
+#define OLED_RESET_PIN 5
+#define ENABLE_SERIAL_PIN 4
 #define TEST_PIN 6
 #define MCP4151_CS_PIN 10
 #define MOSI_PIN 11

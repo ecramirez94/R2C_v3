@@ -1,5 +1,7 @@
 /* System Information */
-
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 64
+#define OLED_ADDRESS 0x3C
 
 /* Device Information */
 
