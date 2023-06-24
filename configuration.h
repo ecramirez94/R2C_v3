@@ -3,6 +3,9 @@
 #define OLED_HEIGHT 64
 #define OLED_ADDRESS 0x3C
 
+#define SPEED_AVERAGE_SIZE 30
+#define STALL_BUFFER_SIZE 10
+
 /* Device Information */
 
 /* Commands Characters */

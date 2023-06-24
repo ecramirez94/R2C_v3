@@ -53,9 +53,9 @@ class MCP4151
   int16_t decrement(void);
   bool setCount(char *data, uint8_t data_len);
   int16_t getCount(void);
+  void setCount(int16_t count);
 
   private:
-  void _setCount(int16_t count);
   /* Upon power-up, the MCP4151 starts at Vcc/2 */
   int16_t _count = floor(MCP4151_STEPS / 2);
 };

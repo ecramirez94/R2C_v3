@@ -31,7 +31,7 @@ void Timers::initHallPulseCounter(void)
   TCCR0B = (0 << FOC0A) | (0 << FOC0B) | (0 << WGM02) | (0 << CS02) | (0 << CS01) | (0 << CS00);
   TIMSK0 = (0 << OCIE0B) | (1 << OCIE0A) | (0 << TOIE0);
 
-  OCR0A = 16; // Number of rotations to trigger interrupt. Must be a multiple of 4.
+  OCR0A = 64; // Number of rotations to trigger interrupt. Must be a multiple of 4.
 }
 
 void Timers::enableHallPulseCounter(void)

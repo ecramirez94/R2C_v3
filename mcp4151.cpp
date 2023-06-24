@@ -6,7 +6,7 @@ bool MCP4151::begin(void)
   spi = new MY_SPI(MCP4151_CS_PIN, MOSI_PIN, MISO_PIN, SCK_PIN, MCP4151_SPI_MODE, false, MSB, true);
   
   /* Initialize the device and count at 0 */
-  _setCount(0);
+  setCount(30);
 
   return true;
 }
@@ -18,7 +18,7 @@ int16_t MCP4151::increment(void)
   if (_count >= MCP4151_STEPS)
     _count = MCP4151_STEPS;
     
-  _setCount(_count);
+  setCount(_count);
   return _count;
 }
 
@@ -29,7 +29,7 @@ int16_t MCP4151::decrement(void)
   if (_count <= 0)
     _count = 0;
     
-  _setCount(_count);
+  setCount(_count);
   return _count;
 }
 
@@ -46,7 +46,7 @@ bool MCP4151::setCount(char *data, uint8_t data_len)
   if (count > MCP4151_STEPS)
     return false;
 
-  _setCount(count);
+  setCount(count);
   return true;
 }
 
@@ -55,7 +55,7 @@ int16_t MCP4151::getCount(void)
   return _count;
 }
 
-void MCP4151::_setCount(int16_t count)
+void MCP4151::setCount(int16_t count)
 {
   _count = count;
   
