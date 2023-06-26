@@ -6,8 +6,6 @@
 #define SPEED_AVERAGE_SIZE 30
 #define STALL_BUFFER_SIZE 10
 
-/* Device Information */
-
 /* Commands Characters */
 #define dev_MCP4151 'B'
 
