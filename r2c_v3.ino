@@ -11,7 +11,6 @@
 #define LOCAL_CONTROL 0
 #define REMOTE_CONTROL 1
 
-
 /* Variables */
 volatile bool send_count = false;
 volatile uint8_t pulse_count = 0;
@@ -33,6 +32,7 @@ volatile uint8_t control_mode = REMOTE_CONTROL;
 volatile bool recover_oled = false;
 
 volatile bool update_control_mode = false;
+volatile bool watchdog_wait = false;
 
 /* Structures */
 struct command
@@ -49,7 +49,6 @@ Adafruit_SSD1306 *oled;
 
 void setup()
 {
-  enableWatchdog();
   /* Enable/Disable peripherals 0 = Enabled, 1 = Disabled */
   PRR = (0 << PRTWI) | (0 << PRTIM2) | (0 << PRTIM0) | (0 << PRTIM1) | (0 << PRSPI) | (0 << PRUSART0) | (0 << PRADC);
 
@@ -68,6 +67,8 @@ void setup()
 
   oled = new Adafruit_SSD1306(OLED_WIDTH, OLED_HEIGHT, &Wire, OLED_RESET_PIN);
   setupOLED();
+  displaySplashScreen();
+  watchdogDelay(2000);
   drawFrameOLED();
   updateRPMValue(0);
 
@@ -84,6 +85,7 @@ void setup()
   timers.enableHallPulseCounter();
   timers.startDisplayUpdateTimer();
 
+  enableWatchdog(2000);
   watchdogReset();
 }
 
@@ -207,9 +209,11 @@ void loop()
 /* ===== Interrupt Service Routines ===== */
 ISR(TIMER0_COMPA_vect)
 {
+  cli();
   timers.disableHallPulseCounter();
   timer_count = uint16_t((1.0 / ((TCNT1 / 16) * 0.000004)) * 60);
   timers.enableHallPulseCounter();
+  sei();
 }
 
 ISR(TIMER2_COMPA_vect)
@@ -227,7 +231,8 @@ ISR(TIMER2_COMPA_vect)
 
 ISR(PCINT0_vect)
 {
-  bool mode_select = digitalRead(CONTROL_MODE_SELECT_PIN); // Equivalent to, but much faster than "digitalRead(CONTROL_MODE_SELECT_PIN)"
+  cli();
+  bool mode_select = digitalRead(CONTROL_MODE_SELECT_PIN);
 
   if (mode_select)
   {
@@ -244,13 +249,15 @@ ISR(PCINT0_vect)
     speed_accumulator = 0;
     update_control_mode = true;
   }
+  sei();
 }
 
 ISR(WDT_vect)
 {
   digitalWrite(TEST_PIN, HIGH);
 
-  recover_oled = true;
+  watchdog_wait = true;
+
 }
 /* ====================================== */
 
@@ -260,17 +267,16 @@ void setupOLED(void)
   oled->clearDisplay();
   oled->setTextSize(1);
   oled->setTextColor(WHITE);
+}
 
+void displaySplashScreen(void)
+{
   /* Load splash screen into buffer */
-  oled->drawBitmap((oled->width()  - SPLASHSCREEN_WIDTH ) / 2,
-                   (oled->height() - SPLASHSCREEN_HEIGHT) / 2,
-                   sprouter_splashscreen, SPLASHSCREEN_WIDTH, SPLASHSCREEN_HEIGHT, 1);
+  oled->drawXBitmap((oled->width()  - SPLASHSCREEN_WIDTH ) / 2,
+                    (oled->height() - SPLASHSCREEN_HEIGHT) / 2,
+                    sprouter_splashscreen, SPLASHSCREEN_WIDTH, SPLASHSCREEN_HEIGHT, 1);
 
   oled->display();
-  for(uint32_t i = 0; i <= 32000000; i++)
-  {
-    asm("nop \n");
-  }
 }
 
 void recoverOLED(void)
@@ -282,6 +288,7 @@ void recoverOLED(void)
 
 void drawFrameOLED(void)
 {
+  oled->clearDisplay();
   oled->drawRect(0, 0, oled->width(), oled->height(), WHITE);
 
   oled->setTextSize(2);
@@ -371,10 +378,69 @@ uint8_t calcTextLength(String text)
   return width;
 }
 
-/* Watchdog Timer Function */
-void enableWatchdog(void)
+/* Watchdog Timer Function
+  - Time-out given in milliseconds according to Table 11-2
+  - See section 11.8 "Watchdog Timer" for more information
+  - Only set to interrupt mode.
+  - In conjunction with a while loop, can be used as a blocking delay function.
+*/
+void enableWatchdog(uint16_t time_out)
 {
-  /* See section 11.8 "Watchdog Timer" for more information */
+  uint8_t control_bits = 0x00;
+  uint8_t prescale = 0x00;
+
+  /* Set config bits */
+  /* Clear interrupt flag (if set) | Enable interrupt mode | Clear Change Enable | Disable reset mode | Set prescaler to default */
+  control_bits = (1 << WDIF) | (1 << WDIE) | (0 << WDP3) | (0 << WDCE) | (0 << WDE) | (0 << WDP2) | (0 << WDP1) | (0 << WDP0);
+
+  /* Determine prescale bits */
+  switch (time_out)
+  {
+    case 16:
+      prescale = 0x00;
+      break;
+
+    case 32:
+      prescale = 0x01;
+      break;
+
+    case 64:
+      prescale = 0x02;
+      break;
+
+    case 125:
+      prescale = 0x03;
+      break;
+
+    case 250:
+      prescale = 0x04;
+      break;
+
+    case 500:
+      prescale = 0x05;
+      break;
+
+    case 1000:
+      prescale = 0x06;
+      break;
+
+    case 2000:
+      prescale = 0x07;
+      break;
+
+    case 4000:
+      prescale = 0x20;
+      break;
+
+    case 8000:
+      prescale = 0x21;
+      break;
+  }
+
+  /* Combine bits */
+  control_bits |= prescale;
+
+  /* Write bits to Watchdog Timer */
   cli();
   MCUSR &= ~(1 << WDRF);
   watchdogReset();
@@ -382,8 +448,7 @@ void enableWatchdog(void)
   /* Start timed sequence */
   WDTCSR |= (1 << WDCE) | (1 << WDE);
   /* Write new configuration in one operation */
-  /* Clear interrupt flag (if set) | Enable interrupt mode | Clear Change Enable | Disable reset mode | Set prescaler to 512K cycles (~4 second timeout) */
-  WDTCSR = (1 << WDIF) | (1 << WDIE) | (0 << WDP3) | (0 << WDCE) | (0 << WDE) | (1 << WDP2) | (1 << WDP1) | (0 << WDP0);
+  WDTCSR = control_bits;
 
   sei();
 }
@@ -393,6 +458,38 @@ void watchdogReset(void)
   asm("WDR \n");
 }
 
+void watchdogDelay(uint16_t milliseconds)
+{
+  /* Delay given in milliseconds according to Table 11-2. */
+
+  /* Configure WDT */
+  enableWatchdog(milliseconds);
+  watchdogReset();
+
+  /* Blocking delay */
+  while (!watchdog_wait) {
+    asm("nop \n");
+  }
+
+  /* Disable Watchdog when complete */
+  disableWatchdog();
+
+  /* Reset boolean */
+  watchdog_wait = false;
+  recover_oled = false;
+}
+
+void disableWatchdog(void)
+{
+  cli();
+  watchdogReset();
+
+  MCUSR &= ~(1 << WDRF);
+  WDTCSR |= (1 << WDCE) | (1 << WDE);
+  WDTCSR = 0x00;
+
+  sei();
+}
 
 void parseCommand(struct command *c, String s)
 {
